@@ -1,52 +1,94 @@
-exports.handler = async function(event, context) {
+exports.handler = async function(event) {
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+    return {
+      statusCode: 405,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Method Not Allowed' })
+    };
   }
 
   const apiKey = process.env.OPENROUTER_API_KEY;
+
   if (!apiKey) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Falta configurar OPENROUTER_API_KEY en las variables de entorno de Netlify' })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        error: 'Falta configurar OPENROUTER_API_KEY en las variables de entorno de Netlify'
+      })
     };
   }
 
   try {
-    const { messages, system_prompt, day_label } = JSON.parse(event.body);
+    const { messages, system_prompt, day_label } = JSON.parse(event.body || '{}');
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://count-calories-ale.netlify.app',
-        'X-Title': 'Count Calories AI'
-      },
-      body: JSON.stringify({
-        model: 'openrouter/free',
-        messages: [
-          { role: 'system', content: system_prompt + `\n\nDÍA ACTUAL: ${day_label}` },
-          ...messages
-        ]
-      })
-    });
+    const models = [
+      'stepfun/step-3.5-flash:free',
+      'z-ai/glm-4.5-air:free',
+      'openrouter/free',
+      'nvidia/nemotron-3-super-120b-a12b:free'
+    ];
 
-    const data = await response.json();
-    
-    if (!response.ok) {
-      return { statusCode: response.status, body: JSON.stringify({ error: data.error?.message || 'Error de OpenRouter' }) };
+    let lastError = null;
+
+    for (const model of models) {
+      try {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer': 'https://count-calories-ale.netlify.app',
+            'X-Title': 'Count Calories AI'
+          },
+          body: JSON.stringify({
+            model,
+            temperature: 0.2,
+            messages: [
+              {
+                role: 'system',
+                content: `${system_prompt}\n\nDÍA ACTUAL: ${day_label}`
+              },
+              ...messages
+            ]
+          })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          lastError = `${model}: ${data.error?.message || `HTTP ${response.status}`}`;
+          continue;
+        }
+
+        return {
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...data,
+            used_model: model
+          })
+        };
+      } catch (err) {
+        lastError = `${model}: ${err.message}`;
+      }
     }
 
     return {
-      statusCode: 200,
+      statusCode: 502,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      body: JSON.stringify({
+        error: 'Todos los modelos gratuitos fallaron',
+        details: lastError
+      })
     };
   } catch (error) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: error.message || 'Error interno en la función Serverless' })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        error: error.message || 'Error interno en la función Serverless'
+      })
     };
   }
 };
-
