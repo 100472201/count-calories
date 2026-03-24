@@ -580,6 +580,50 @@ let foodEntries = [];
 let isLoading = false;
 let chatHistory = [];
 
+function getStorageKey() {
+  const d = new Date();
+  return `kcal_tracker_${d.getFullYear()}_${d.getMonth()+1}_${d.getDate()}`;
+}
+
+function saveState() {
+  const state = { dayType, totals, foodEntries, chatHistory };
+  localStorage.setItem(getStorageKey(), JSON.stringify(state));
+}
+
+function loadState() {
+  const raw = localStorage.getItem(getStorageKey());
+  if (!raw) return false;
+  try {
+    const state = JSON.parse(raw);
+    if (state.dayType) dayType = state.dayType;
+    if (state.totals) totals = state.totals;
+    if (state.foodEntries) foodEntries = state.foodEntries;
+    if (state.chatHistory) chatHistory = state.chatHistory;
+    return true;
+  } catch (e) {
+    console.error('Error loading state:', e);
+    return false;
+  }
+}
+
+function renderChatHistory() {
+  const msgs = document.getElementById('messages');
+  msgs.innerHTML = '';
+  chatHistory.forEach(msg => {
+    if (msg.role === 'user') {
+      appendMessage('user', msg.content);
+    } else {
+      let text = msg.content;
+      let macro = null;
+      const m = text.match(/<<<MACROS>>>\s*([\s\S]*?)\s*<<<END>>>/);
+      if (m) {
+        try { macro = JSON.parse(m[1]); text = text.replace(/<<<MACROS>>>[\s\S]*?<<<END>>>/, '').trim(); } catch(e){}
+      }
+      appendMessage('assistant', text, macro);
+    }
+  });
+}
+
 // ── DESAYUNO FIJO ──────────────────────────────────────────────
 const DESAYUNO_FIJO = {
   entries: [
@@ -663,7 +707,8 @@ Sé preciso pero sin ser pedante. Respuestas cortas y directas.`;
 function setDayType(type, btn) {
   dayType = type;
   document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  if (!btn) btn = document.querySelector(`.day-btn[data-type="${type}"]`);
+  if (btn) btn.classList.add('active');
   const t = TARGETS[type];
   document.getElementById('typeDot').style.background = t.color;
   document.getElementById('typeLabel').textContent = t.label;
@@ -671,6 +716,7 @@ function setDayType(type, btn) {
   document.getElementById('tgtCarbs').textContent = t.carbs;
   document.getElementById('tgtFat').textContent = t.fat;
   updateBars();
+  saveState();
 }
 
 function updateBars() {
@@ -701,7 +747,7 @@ function updateBars() {
 }
 
 function addFoodEntry(label, kcal, prot, carbs, fat) {
-  const id = Date.now();
+  const id = Date.now() + Math.random();
   foodEntries.push({ id, label, kcal, prot, carbs, fat });
   totals.kcal += kcal;
   totals.prot += prot;
@@ -709,6 +755,7 @@ function addFoodEntry(label, kcal, prot, carbs, fat) {
   totals.fat += fat;
   renderFoodLog();
   updateBars();
+  saveState();
 }
 
 function removeEntry(id) {
@@ -722,6 +769,7 @@ function removeEntry(id) {
   foodEntries.splice(idx, 1);
   renderFoodLog();
   updateBars();
+  saveState();
 }
 
 function renderFoodLog() {
@@ -823,6 +871,7 @@ function loadDesayunoFijo() {
   appendMessage('assistant', msg, null);
   chatHistory.push({ role: 'user', content: 'desayuno fijo' });
   chatHistory.push({ role: 'assistant', content: msg });
+  saveState();
 }
 
 async function send() {
@@ -845,6 +894,7 @@ async function send() {
   }
 
   chatHistory.push({ role: 'user', content: text });
+  saveState();
   showLoading();
 
   try {
@@ -878,6 +928,7 @@ async function send() {
     hideLoading();
     appendMessage('assistant', displayText, macroData);
     chatHistory.push({ role: 'assistant', content: fullText });
+    saveState();
 
   } catch(e) {
     hideLoading();
@@ -898,6 +949,7 @@ function resetDay() {
   renderFoodLog();
   updateBars();
   showWelcome();
+  saveState();
 }
 
 function showWelcome() {
@@ -919,9 +971,15 @@ Para lo demás, cuéntame lo que has comido y te calculo los macros al momento.<
 }
 
 // Init
-renderFoodLog();
-updateBars();
-showWelcome();
+if (loadState()) {
+  setDayType(dayType);
+  renderFoodLog();
+  renderChatHistory();
+} else {
+  renderFoodLog();
+  updateBars();
+  showWelcome();
+}
 </script>
 </body>
 </html>
