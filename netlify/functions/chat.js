@@ -18,10 +18,12 @@ exports.handler = async function(event, context) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://count-calories-ale.netlify.app',
+        'X-Title': 'Count Calories AI'
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-3.5-sonnet',
+        model: 'openrouter/free',
         messages: [
           { role: 'system', content: system_prompt + `\n\nDÍA ACTUAL: ${day_label}` },
           ...messages

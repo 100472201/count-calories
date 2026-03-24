@@ -932,7 +932,7 @@ async function send() {
 
   } catch(e) {
     hideLoading();
-    appendMessage('assistant', 'Error de conexión. Intenta de nuevo.');
+    appendMessage('assistant', `Error: ${e.message}`);
   }
 
   isLoading = false;
