@@ -25,6 +25,7 @@
     --gym: #c8f060;
     --run: #60f0c8;
     --climb: #f060c8;
+    --tennis: #ffb347;
     --rest: #6080f0;
   }
 
@@ -102,7 +103,8 @@
   .day-btn.active[data-type="run"] { background: var(--run); color: #0f0f0e; border-color: var(--run); }
   .day-btn.active[data-type="climb"] { background: var(--climb); color: #0f0f0e; border-color: var(--climb); }
   .day-btn.active[data-type="rest"] { background: var(--rest); color: #fff; border-color: var(--rest); }
-
+  .day-btn.active[data-type="tennis"] { background: var(--tennis); color: #0f0f0e; border-color: var(--tennis);}
+  
   /* Main layout */
   .main {
     display: grid;
@@ -496,6 +498,7 @@
   <button class="day-btn active" data-type="gym" onclick="setDayType('gym', this)">🏋️ Gym fuerza</button>
   <button class="day-btn" data-type="run" onclick="setDayType('run', this)">🏃 Running</button>
   <button class="day-btn" data-type="climb" onclick="setDayType('climb', this)">🧗 Escalada</button>
+  <button class="day-btn" data-type="tennis" onclick="setDayType('tennis', this)">🎾 Tenis</button>
   <button class="day-btn" data-type="rest" onclick="setDayType('rest', this)">😴 Descanso</button>
 </div>
 
@@ -516,14 +519,14 @@
     </div>
   </div>
 
-  <div class="sidebar">
-    <div>
-      <div class="sidebar-title" style="margin-bottom:12px">Objetivo del día</div>
-      <div class="target-card">
-        <div class="target-type">
-          <div class="type-dot" id="typeDot" style="background: var(--gym)"></div>
-          <span id="typeLabel">Gym fuerza — 2.950 kcal</span>
-        </div>
+<div class="sidebar">
+  <div>
+    <div class="sidebar-title" style="margin-bottom:12px">Objetivo del día</div>
+    <div class="target-card">
+      <div class="target-type">
+        <div class="type-dot" id="typeDot" style="background: var(--gym)"></div>
+        <span id="typeLabel">Gym fuerza — 2.950 kcal</span>
+      </div>
         <div class="kcal-big">
           <div class="kcal-number" id="totalKcal">0</div>
           <div class="kcal-sub">kcal consumidas · <span id="remaining">2950 restantes</span></div>
@@ -555,6 +558,31 @@
     </div>
 
     <div>
+      <div class="sidebar-title" style="margin-bottom:10px">Movimiento del día</div>
+      <div class="target-card">
+        <div class="target-type" style="justify-content:space-between">
+          <span>Pasos</span>
+          <span id="stepsValue">8000</span>
+        </div>
+
+        <input
+          id="stepsSlider"
+          type="range"
+          min="2000"
+          max="20000"
+          step="500"
+          value="8000"
+          oninput="setSteps(this.value)"
+          style="width:100%; margin: 6px 0 10px;"
+        >
+
+        <div class="kcal-sub">
+          Ajuste por pasos: <span id="stepsAdjustText">0 kcal</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
       <div class="sidebar-title" style="margin-bottom:10px">Lo registrado hoy</div>
       <div class="food-log" id="foodLog">
         <div class="empty-state" id="emptyState">
@@ -569,13 +597,28 @@
 
 <script>
 const TARGETS = {
-  gym:   { label: 'Gym fuerza — 2.950 kcal', kcal: 2950, prot: 160, carbs: 390, fat: 84, color: 'var(--gym)' },
-  run:   { label: 'Running — 2.750 kcal',     kcal: 2750, prot: 155, carbs: 355, fat: 79, color: 'var(--run)' },
-  climb: { label: 'Escalada — 2.900 kcal',    kcal: 2900, prot: 160, carbs: 375, fat: 84, color: 'var(--climb)' },
-  rest:  { label: 'Descanso — 2.450 kcal',    kcal: 2450, prot: 150, carbs: 295, fat: 74, color: 'var(--rest)' },
+  gym:    { label: 'Gym fuerza', kcal: 2950, prot: 160, carbs: 390, fat: 84, color: 'var(--gym)' },
+  run:    { label: 'Running',    kcal: 2750, prot: 155, carbs: 355, fat: 79, color: 'var(--run)' },
+  tennis: { label: 'Tenis',      kcal: 2850, prot: 155, carbs: 365, fat: 80, color: 'var(--tennis)' },
+  climb:  { label: 'Escalada',   kcal: 2900, prot: 160, carbs: 375, fat: 84, color: 'var(--climb)' },
+  rest:   { label: 'Descanso',   kcal: 2450, prot: 150, carbs: 295, fat: 74, color: 'var(--rest)' },
 };
 
+const DEFAULT_STEPS = 8000;
+const KCAL_PER_1000_STEPS = 35;
+const STEPS_ADJUST_THRESHOLD_KCAL = 100;
+
+function getRawStepsAdjustmentKcal() {
+  return Math.round(((steps - DEFAULT_STEPS) / 1000) * KCAL_PER_1000_STEPS);
+}
+
+function getStepsAdjustmentKcal() {
+  const rawAdjust = getRawStepsAdjustmentKcal();
+  return Math.abs(rawAdjust) > STEPS_ADJUST_THRESHOLD_KCAL ? rawAdjust : 0;
+}
+
 let dayType = 'gym';
+let steps = DEFAULT_STEPS;
 let totals = { kcal: 0, prot: 0, carbs: 0, fat: 0 };
 let foodEntries = [];
 let isLoading = false;
@@ -587,7 +630,7 @@ function getStorageKey() {
 }
 
 function saveState() {
-  const state = { dayType, totals, foodEntries, chatHistory };
+  const state = { dayType, steps, totals, foodEntries, chatHistory };
   localStorage.setItem(getStorageKey(), JSON.stringify(state));
 }
 
@@ -597,6 +640,7 @@ function loadState() {
   try {
     const state = JSON.parse(raw);
     if (state.dayType) dayType = state.dayType;
+    if (typeof state.steps === 'number') steps = state.steps;
     if (state.totals) totals = state.totals;
     if (state.foodEntries) foodEntries = state.foodEntries;
     if (state.chatHistory) chatHistory = state.chatHistory;
@@ -738,23 +782,71 @@ COMPORTAMIENTO:
 - Si pregunta cómo subir carbohidratos → usa la guía personalizada
 - Sé breve, claro y práctico.`;
 
+function formatKcal(n) {
+  return Math.round(n).toLocaleString('es-ES');
+}
+
+function getAdjustedTarget() {
+  const base = TARGETS[dayType];
+  const kcalAdjust = getStepsAdjustmentKcal();
+
+  return {
+    ...base,
+    kcal: base.kcal + kcalAdjust,
+    carbs: Math.max(0, Math.round(base.carbs + (kcalAdjust / 4)))
+  };
+}
+
+function updateStepsUI() {
+  const rawAdjust = getRawStepsAdjustmentKcal();
+  const appliedAdjust = getStepsAdjustmentKcal();
+
+  document.getElementById('stepsValue').textContent = steps;
+  document.getElementById('stepsSlider').value = steps;
+
+  if (appliedAdjust === 0) {
+    document.getElementById('stepsAdjustText').textContent =
+      `Estimación: ${rawAdjust >= 0 ? '+' : ''}${rawAdjust} kcal · no aplicado`;
+  } else {
+    document.getElementById('stepsAdjustText').textContent =
+      `Ajuste aplicado: ${appliedAdjust >= 0 ? '+' : ''}${appliedAdjust} kcal`;
+  }
+}
+
+function setSteps(value) {
+  steps = Number(value);
+  updateStepsUI();
+  refreshTargetUI();
+  updateBars();
+  saveState();
+}
+
+function refreshTargetUI() {
+  const base = TARGETS[dayType];
+  const t = getAdjustedTarget();
+
+  document.getElementById('typeDot').style.background = base.color;
+  document.getElementById('typeLabel').textContent = `${base.label} — ${formatKcal(t.kcal)} kcal`;
+  document.getElementById('tgtProt').textContent = t.prot;
+  document.getElementById('tgtCarbs').textContent = t.carbs;
+  document.getElementById('tgtFat').textContent = t.fat;
+
+  updateStepsUI();
+}
+
 function setDayType(type, btn) {
   dayType = type;
   document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
   if (!btn) btn = document.querySelector(`.day-btn[data-type="${type}"]`);
   if (btn) btn.classList.add('active');
-  const t = TARGETS[type];
-  document.getElementById('typeDot').style.background = t.color;
-  document.getElementById('typeLabel').textContent = t.label;
-  document.getElementById('tgtProt').textContent = t.prot;
-  document.getElementById('tgtCarbs').textContent = t.carbs;
-  document.getElementById('tgtFat').textContent = t.fat;
+
+  refreshTargetUI();
   updateBars();
   saveState();
 }
 
 function updateBars() {
-  const t = TARGETS[dayType];
+  const t = getAdjustedTarget();
   const { kcal, prot, carbs, fat } = totals;
 
   const kcalEl = document.getElementById('totalKcal');
@@ -795,14 +887,23 @@ function addFoodEntry(label, kcal, prot, carbs, fat) {
 function removeEntry(id) {
   const idx = foodEntries.findIndex(e => e.id === id);
   if (idx === -1) return;
+
   const e = foodEntries[idx];
+
   totals.kcal -= e.kcal;
   totals.prot -= e.prot;
   totals.carbs -= e.carbs;
   totals.fat -= e.fat;
+
   foodEntries.splice(idx, 1);
+
   renderFoodLog();
   updateBars();
+
+  const msg = `🗑️ He quitado del registro: ${e.label} (${Math.round(e.kcal)} kcal). Ya no cuenta en el total del día.`;
+  appendMessage('assistant', msg, null);
+  chatHistory.push({ role: 'assistant', content: msg });
+
   saveState();
 }
 
@@ -908,6 +1009,29 @@ function loadDesayunoFijo() {
   saveState();
 }
 
+function buildCurrentStateContext() {
+  const t = getAdjustedTarget();
+
+  const entriesText = foodEntries.length
+    ? foodEntries.map(e =>
+        `- ${e.label}: ${Math.round(e.kcal)} kcal | P:${Math.round(e.prot)}g | C:${Math.round(e.carbs)}g | G:${Math.round(e.fat)}g`
+      ).join('\n')
+    : '- Sin ingestas registradas';
+
+  return `
+ESTADO REAL DEL DÍA (esta es la fuente de verdad):
+- Tipo de día: ${TARGETS[dayType].label}
+- Pasos del día: ${steps}
+- Objetivo kcal ajustado: ${t.kcal}
+- Objetivos macros ajustados: P ${t.prot}g | C ${t.carbs}g | G ${t.fat}g
+- Totales consumidos reales: ${Math.round(totals.kcal)} kcal | P ${Math.round(totals.prot)}g | C ${Math.round(totals.carbs)}g | G ${Math.round(totals.fat)}g
+- Registro actual real:
+${entriesText}
+
+Si algo se ha eliminado del panel "Lo registrado hoy", ya NO cuenta. Prioriza siempre este estado real sobre mensajes anteriores si hay contradicción.
+`.trim();
+}
+
 async function send() {
   const input = document.getElementById('input');
   const text = input.value.trim();
@@ -936,9 +1060,9 @@ async function send() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        system_prompt: SYSTEM_PROMPT,
-        day_label: TARGETS[dayType].label,
-        messages: chatHistory
+        system_prompt: `${SYSTEM_PROMPT}\n\n${buildCurrentStateContext()}`,
+        day_label: `${TARGETS[dayType].label} — ${getAdjustedTarget().kcal} kcal`,
+        messages: chatHistory.slice(-12)
       })
     });
 
@@ -1012,12 +1136,16 @@ if (loadState()) {
   setDayType(dayType);
   renderFoodLog();
   renderChatHistory();
+  updateStepsUI();
   updateBars();
 } else {
   renderFoodLog();
+  setDayType(dayType);
+  updateStepsUI();
   updateBars();
   showWelcome();
 }
+
 </script>
 </body>
 </html>
