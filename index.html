@@ -615,9 +615,9 @@ function renderChatHistory() {
     } else {
       let text = msg.content;
       let macro = null;
-      const m = text.match(/<<<MACROS>>>\s*([\s\S]*?)\s*<<<END>>>/);
+      const m = text.match(/<+MACROS>+\s*([\s\S]*?)\s*<+END>+/i);
       if (m) {
-        try { macro = JSON.parse(m[1]); text = text.replace(/<<<MACROS>>>[\s\S]*?<<<END>>>/, '').trim(); } catch(e){}
+        try { macro = JSON.parse(m[1]); text = text.replace(/<+MACROS>+[\s\S]*?<+END>+/i, '').trim(); } catch(e){}
       }
       appendMessage('assistant', text, macro);
     }
@@ -946,16 +946,18 @@ async function send() {
     const fullText = data.choices?.[0]?.message?.content || 'Error al obtener respuesta.';
 
     // Parse macro block
-    const macroMatch = fullText.match(/<<<MACROS>>>\s*([\s\S]*?)\s*<<<END>>>/);
+    const macroMatch = fullText.match(/<+MACROS>+\s*([\s\S]*?)\s*<+END>+/i);
     let macroData = null;
     let displayText = fullText;
 
     if (macroMatch) {
       try {
         macroData = JSON.parse(macroMatch[1]);
-        displayText = fullText.replace(/<<<MACROS>>>[\s\S]*?<<<END>>>/, '').trim();
+        displayText = fullText.replace(/<+MACROS>+[\s\S]*?<+END>+/i, '').trim();
         addFoodEntry(macroData.label || 'Alimento', macroData.kcal, macroData.prot, macroData.carbs, macroData.fat);
-      } catch(e) {}
+      } catch(e) {
+        console.error("Error al parear bloque MACROS de AI:", e);
+      }
     }
 
     hideLoading();

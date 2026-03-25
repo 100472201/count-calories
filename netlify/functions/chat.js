@@ -32,7 +32,11 @@ exports.handler = async function(event) {
     let lastError = null;
 
     for (const model of models) {
+      console.log(`[OpenRouter] Intentando conectar con modelo: ${model}...`);
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6500);
+
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -51,8 +55,11 @@ exports.handler = async function(event) {
               },
               ...messages
             ]
-          })
+          }),
+          signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
 
         const data = await response.json().catch(() => ({}));
 
